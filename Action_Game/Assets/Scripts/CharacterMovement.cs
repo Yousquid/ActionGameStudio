@@ -6,7 +6,7 @@ public class CharacterMovement : MonoBehaviour
     public float acceleration = 10f;    // 加速度
     public float maxSpeed = 12f;         // 最大速度
     public float deceleration = 8f;     // 松开按键时的减速度
-    public float rotationSpeed = 10f;   // 转向速度（用于让角色朝向移动方向）
+    public float rotationSpeed = 420f;   // 转向速度（用于让角色朝向移动方向）
 
     public Transform camera;
 
@@ -43,41 +43,16 @@ public class CharacterMovement : MonoBehaviour
             camRight = camera.right;
             camLeft = -camera.right;
             camBackward = -camera.forward; ;
-        
-       
-
-        camForward.y = 0f; camRight.y = 0f;
-        camForward.Normalize();
-        camRight.Normalize();
+ 
     }
 
 
     private void InputDetection()
     {
 
-        if (Input.GetKey(KeyCode.W))
-        {
-            counterDirectionKey = KeyCode.S;
-        }
-        else if (Input.GetKey(KeyCode.S))
-        {
-            counterDirectionKey = KeyCode.W;
-
-        }
-        else if (Input.GetKey(KeyCode.A))
-        {
-            counterDirectionKey = KeyCode.D;
-
-        }
-        else if (Input.GetKey(KeyCode.D))
-        {
-            counterDirectionKey = KeyCode.A;
-
-        }
-
-        RotateCharacterWhileIdle();
         StopCharacterWhileHoldingOppositeDirections();
-        RotateCharacterWhileWalkAndRun();
+        RotateCharacterWhileIdle();
+
     }
     void StateDetection()
     {
@@ -99,24 +74,14 @@ public class CharacterMovement : MonoBehaviour
 
     void StopCharacterWhileHoldingOppositeDirections()
     {
-        if (Input.GetKey(KeyCode.A) && Input.GetKey(KeyCode.D))
-        {
-            rb.linearVelocity = Vector3.zero;
-        }
-
-        if (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.S))
-        {
-            rb.linearVelocity = Vector3.zero;
-        }
-    }
-    void RotateCharacterWhileWalkAndRun()
-    {
         if ((Input.GetKey(KeyCode.A) && Input.GetKeyDown(KeyCode.D)) ||
-           (Input.GetKey(KeyCode.D) && Input.GetKeyDown(KeyCode.A)))
+          (Input.GetKey(KeyCode.D) && Input.GetKeyDown(KeyCode.A)))
         {
             rb.linearVelocity = Vector3.zero;
 
-            
+
+
+
         }
 
         if ((Input.GetKey(KeyCode.W) && Input.GetKeyDown(KeyCode.S)) ||
@@ -124,43 +89,70 @@ public class CharacterMovement : MonoBehaviour
         {
             rb.linearVelocity = Vector3.zero;
 
-            
+
         }
     }
+  
     private void RotateCharacterWhileIdle()
+    {if (characterMoveState != MoveState.Idle) return;
+
+    if      (Input.GetKeyDown(KeyCode.W)) Face(camForward);
+    else if (Input.GetKeyDown(KeyCode.S)) Face(camBackward);
+    else if (Input.GetKeyDown(KeyCode.D)) Face(camRight);
+    else if (Input.GetKeyDown(KeyCode.A)) Face(camLeft);
+    else
     {
-        if (characterMoveState == MoveState.Idle)
-        {
-            if (Input.GetKeyDown(KeyCode.W)|| Input.GetKey(KeyCode.W))
-            {
-                Vector3 flatCamForward = camForward.normalized;
-                Quaternion targetRot = Quaternion.LookRotation(flatCamForward, Vector3.up);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 1000f * Time.deltaTime);
-            }
-            if (Input.GetKeyDown(KeyCode.A) || Input.GetKey(KeyCode.A))
-            {
-                Vector3 flatCamForward = camLeft.normalized;
-                Quaternion targetRot = Quaternion.LookRotation(flatCamForward, Vector3.up);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 1000f * Time.deltaTime);
-            }
-            if (Input.GetKeyDown(KeyCode.S) || Input.GetKey(KeyCode.S))
-            {
-                Vector3 flatCamForward = camBackward.normalized;
-                Quaternion targetRot = Quaternion.LookRotation(flatCamForward, Vector3.up);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 1000f * Time.deltaTime);
-            }
-            if (Input.GetKeyDown(KeyCode.D) || Input.GetKey(KeyCode.D))
-            {
-                Vector3 flatCamForward = camRight.normalized;
-                Quaternion targetRot = Quaternion.LookRotation(flatCamForward, Vector3.up);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 1000f * Time.deltaTime);
-            }
-        }
+      
+        if      (Input.GetKey(KeyCode.D) && !Input.GetKey(KeyCode.A)) Face(camRight);
+        else if (Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.D)) Face(camLeft);
+        else if (Input.GetKey(KeyCode.W) && !Input.GetKey(KeyCode.S)) Face(camForward);
+        else if (Input.GetKey(KeyCode.S) && !Input.GetKey(KeyCode.W)) Face(camBackward);
     }
 
+    void Face(Vector3 dir)
+    {
+        var desired = dir.normalized;
+        var target = Quaternion.LookRotation(desired, Vector3.up);
+        transform.rotation = Quaternion.Slerp(transform.rotation, target, 1000f * Time.deltaTime);
+    }
+    }
+
+    void RotateCharacterWhileWalkAndRun()
+    {
+        if (characterMoveState != MoveState.Walk && characterMoveState != MoveState.Run)
+            return;
+
+        // 基于相机的四向向量（保持水平分量）
+        Vector3 fwd = Flat(camForward);
+        Vector3 back = Flat(camBackward);
+        Vector3 right = Flat(camRight);
+        Vector3 left = Flat(camLeft);
+
+        // 键权重：按住即给该方向持续“转向增量”
+        int w = Input.GetKey(KeyCode.W) ? 1 : 0;
+        int s = Input.GetKey(KeyCode.S) ? 1 : 0;
+        int d = Input.GetKey(KeyCode.D) ? 1 : 0;
+        int a = Input.GetKey(KeyCode.A) ? 1 : 0;
+
+        // 合成“期望朝向”向量（可同时按键，自动取对角）
+        Vector3 desired = fwd * w + back * s + right * d + left * a;
+        desired = Flat(desired);
+        if (desired.sqrMagnitude == 0f) return; // 没有方向需求就不旋转
+
+        // 按角速度持续朝“期望朝向”旋转（持续增加已转角度）
+        Vector3 current = Flat(transform.forward);
+        float maxRadiansThisFrame = rotationSpeed * Mathf.Deg2Rad * Time.deltaTime;
+        Vector3 newDir = Vector3.RotateTowards(current, desired, maxRadiansThisFrame, 0f);
+        transform.rotation = Quaternion.LookRotation(newDir, Vector3.up);
+
+         Vector3 Flat(Vector3 v)
+        {
+            v.y = 0f;
+            return v.sqrMagnitude > 0f ? v.normalized : Vector3.zero;
+        }
+    }
     void FixedUpdate()
     {
-        StopCharacterWhileHoldingOppositeDirections();
         bool oppositeHeld = (Input.GetKey(KeyCode.A) && Input.GetKey(KeyCode.D)) ||
                        (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.S));
 
@@ -173,6 +165,7 @@ public class CharacterMovement : MonoBehaviour
         }
 
         HandleMovement();
+        RotateCharacterWhileWalkAndRun();
     }
 
     private void HandleMovement()

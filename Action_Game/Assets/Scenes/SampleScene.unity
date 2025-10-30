@@ -968,10 +968,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2432a621fefb98940ad406a9861a5f1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterMovement
-  acceleration: 15
+  acceleration: 18
   maxSpeed: 12
   deceleration: 8
-  rotationSpeed: 10
+  rotationSpeed: 420
   camera: {fileID: 2099222440}
   characterMoveState: 0
 --- !u!54 &1845719057
