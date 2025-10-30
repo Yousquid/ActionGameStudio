@@ -968,8 +968,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2432a621fefb98940ad406a9861a5f1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterMovement
-  acceleration: 4
-  maxSpeed: 20
+  acceleration: 15
+  maxSpeed: 12
   deceleration: 8
   rotationSpeed: 10
   camera: {fileID: 2099222440}
