@@ -15,6 +15,19 @@ public class CharacterMovement : MonoBehaviour
     private Vector3 camForward, camRight, camLeft, camBackward;
     private KeyCode counterDirectionKey;
 
+    [Header("SM64-like Turning")]
+    public float yawAccelDegPerSec2 = 2200f;   // 角加速度（越大越迅猛）
+    public float yawFrictionDegPerSec = 500f;  // 角速度摩擦（松开/对齐时更快停下）
+    public float yawSpeedCapDegPerSec = 420f;  // 最大角速度（类似你原来的 rotationSpeedDeg）
+
+    // 轻微“向前偏置”（前/后>左右）
+    [Range(0.5f, 2f)] public float forwardWeight = 1.0f;
+    [Range(0.5f, 2f)] public float lateralWeight = 0.85f;
+
+    // ====== Runtime state（运行时状态）======
+    private float currentYawDeg;   // 角色当前朝向（水平），用欧拉角缓存
+    private float yawVelDegPerSec; // 当前角速度
+
     public enum MoveState
     {
         Idle,
@@ -28,10 +41,13 @@ public class CharacterMovement : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
         rb.freezeRotation = true; // 防止物理旋转
+        currentYawDeg = transform.rotation.eulerAngles.y;
+
     }
 
     void Update()
     {
+        SetCameraRotationWhileIdle();
         ReadCameraBasis();
         InputDetection();
         StateDetection();
@@ -53,6 +69,13 @@ public class CharacterMovement : MonoBehaviour
         StopCharacterWhileHoldingOppositeDirections();
         RotateCharacterWhileIdle();
 
+    }
+
+    void SetCameraRotationWhileIdle()
+    {
+        if (characterMoveState != MoveState.Idle) return;
+
+        camera.rotation = Quaternion.LookRotation(transform.forward, transform.up);
     }
     void StateDetection()
     {
@@ -117,6 +140,44 @@ public class CharacterMovement : MonoBehaviour
     }
     }
 
+    private Vector3 Flat(Vector3 v)
+    {
+        v.y = 0f;
+        if (v.sqrMagnitude > 0f) v.Normalize();
+        return v;
+    }
+    private bool TryGetDesiredDir(out Vector3 desiredDir)
+    {
+        desiredDir = Vector3.zero;
+
+        Vector3 fwd = Flat(camForward);
+        Vector3 back = Flat(camBackward);
+        Vector3 right = Flat(camRight);
+        Vector3 left = Flat(camLeft);
+
+        // 键输入
+        int w = Input.GetKey(KeyCode.W) ? 1 : 0;
+        int s = Input.GetKey(KeyCode.S) ? 1 : 0;
+        int d = Input.GetKey(KeyCode.D) ? 1 : 0;
+        int a = Input.GetKey(KeyCode.A) ? 1 : 0;
+
+        if ((w | s | a | d) == 0) return false;
+
+        // 前后稍重，左右稍轻，让“前+左/右”更偏前
+        desiredDir = fwd * (w * forwardWeight)
+                   + back * (s * forwardWeight)
+                   + right * (d * lateralWeight)
+                   + left * (a * lateralWeight);
+
+        desiredDir = Flat(desiredDir);
+        return desiredDir.sqrMagnitude > 0f;
+    }
+
+    private static float DeltaAngle(float fromDeg, float toDeg)
+    {
+        float d = Mathf.DeltaAngle(fromDeg, toDeg);
+        return d;
+    }
     void RotateCharacterWhileWalkAndRun()
     {
         if (characterMoveState != MoveState.Walk && characterMoveState != MoveState.Run)
@@ -145,7 +206,7 @@ public class CharacterMovement : MonoBehaviour
         Vector3 newDir = Vector3.RotateTowards(current, desired, maxRadiansThisFrame, 0f);
         transform.rotation = Quaternion.LookRotation(newDir, Vector3.up);
 
-         Vector3 Flat(Vector3 v)
+        Vector3 Flat(Vector3 v)
         {
             v.y = 0f;
             return v.sqrMagnitude > 0f ? v.normalized : Vector3.zero;

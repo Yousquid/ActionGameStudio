@@ -1,212 +1,162 @@
 using UnityEngine;
+using Unity.Cinemachine;
+using Unity.Cinemachine.TargetTracking;     // 访问 TrackerSettings / BindingMode
+
 
 public class CameraSystem : MonoBehaviour
 {
-    public enum CameraMode { Lakitu, Mario }
+    [Header("Targets")]
+    public Transform followTarget;
 
-    [Header("Target")]
-    public Transform target;
-    public Vector3 targetOffset = new Vector3(0f, 1.5f, 0f); // 角色头顶/肩部附近
+    [Header("References")]
+    public CinemachineCamera cmCamera;
+    private CinemachineFollow follow;
 
-    [Header("Mode")]
-    public CameraMode mode = CameraMode.Lakitu;
+    [Header("Offsets")]
+    public Vector3 normalOffset = new Vector3(0f, 6f, -8f);   // 平时：世界空间偏移
+    public Vector3 behindOffset = new Vector3(0f, 3.5f, -5f); // 触发后：目标局部空间“身后”
 
-    [Header("Yaw / Pitch")]
-    [Tooltip("单次分段旋转的角度")]
-    public float yawStep = 45f;
-    public float yawSmooth = 12f;
-    public float pitch = 20f;
-    public float pitchMin = -10f;
-    public float pitchMax = 50f;
-    public float pitchAutoLiftWhenClose = 10f;
+    [Header("Blend & Smoothing")]
+    public float moveLerpTime = 0.35f;
+    public float rotSnapLerpTime = 0.25f;
 
-    [Header("Zoom (presets)")]
-    public float nearDist = 2.8f;
-    public float mediumDist = 4.2f;
-    public float farDist = 6.5f;
-    public float zoomSmooth = 8f;
-    public int startZoomIndex = 1; // 0/1/2 => near/med/far
+    [Header("Behavior")]
+    public bool continuousFollowRotation = false;
+    public bool startInNormalMode = true;
 
-    [Header("Collision")]
-    public LayerMask collisionMask = ~0;     // 默认对所有层做碰撞
-    public float sphereRadius = 0.22f;       // 防穿墙检测半径
-    public float wallPadding = 0.10f;        // 离墙保留距离
-    public float minDistance = 0.7f;         // 相机最小可推进距离
-    public float raiseWhenBlocked = 0.35f;   // 被挡时抬升量
+    // state
+    private bool inBehindMode = false;
+    private bool isBlending = false;
 
-    [Header("Mario Mode Tuning")]
-    [Tooltip("Mario 模式下，镜头会朝角色朝向自动偏转的强度（0~1）")]
-    public float marioHeadingFollow = 0.6f;
-
-    [Header("General Smooth")]
-    public float positionSmooth = 18f;
-    public float rotationSmooth = 18f;
-
-    // Inputs (老版 Input；若用新 Input System，可在 UpdateInputs 中替换)
-    [Header("Input (legacy)")]
-    public KeyCode rotateLeftKey = KeyCode.Q;       // C-Left
-    public KeyCode rotateRightKey = KeyCode.E;      // C-Right
-    public KeyCode zoomInKey = KeyCode.Z;           // 近
-    public KeyCode zoomOutKey = KeyCode.X;          // 远
-    public KeyCode toggleModeKey = KeyCode.C;       // 切 Lakitu/Mario
-    public KeyCode pitchUpKey = KeyCode.PageUp;     // 可选：微调俯仰
-    public KeyCode pitchDownKey = KeyCode.PageDown;
-
-    // State
-    private float desiredYaw;      // 目标分段 yaw
-    private float currentYaw;      // 平滑后的 yaw
-    private float desiredDistance; // 目标距离（Near/Med/Far 之一）
-    private float currentDistance; // 平滑后的距离
-
-    private Transform cam;         // 真正的 Camera transform
-
-    // 区域覆盖
+    void Reset()
+    {
+        cmCamera = GetComponent<CinemachineCamera>();
+    }
 
     void Awake()
     {
-        cam = GetComponentInChildren<Camera>() ? GetComponentInChildren<Camera>().transform : Camera.main.transform;
-        if (!cam)
-        {
-            Debug.LogWarning("[SM64Camera] No Camera found as child or Main Camera in scene.");
-        }
-    }
+        // 1) 在当前对象上找 CinemachineCamera
+        if (!cmCamera)
+            TryGetComponent(out cmCamera);
 
-    void Start()
-    {
-        if (target == null)
+        // 2) 如果还没找到，尝试在子物体里找（有些人把脚本挂在父物体上）
+        if (!cmCamera)
+            cmCamera = GetComponentInChildren<CinemachineCamera>(true);
+
+        if (!cmCamera)
         {
-            Debug.LogError("[SM64Camera] Please assign a target.");
+            Debug.LogError("[CameraSystem] 没找到 CinemachineCamera。请把脚本挂在含有 CinemachineCamera 组件的对象上（不是 Main Camera）。");
             enabled = false;
             return;
         }
 
-        // 初始化 yaw：让镜头朝向角色朝向的后方
-        Vector3 fwd = target.forward; fwd.y = 0f;
-        if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
-        desiredYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
-        currentYaw = desiredYaw;
-
-        desiredDistance = Mathf.Clamp(startZoomIndex, 0, 2) switch
-        {
-            0 => nearDist,
-            2 => farDist,
-            _ => mediumDist
-        };
-        currentDistance = desiredDistance;
+        // 3) 拿到/添加 CinemachineFollow
+        if (!cmCamera.TryGetComponent(out follow))
+            follow = cmCamera.gameObject.AddComponent<CinemachineFollow>();
     }
 
-    void Update()
+    void Start()
     {
-        UpdateInputs();
+        if (!followTarget)
+        {
+            Debug.LogError("请设置 Follow Target");
+            enabled = false;
+            return;
+        }
 
-        
+        cmCamera.Follow = followTarget;   // CM3: 直接用 Follow/LookAt
+        cmCamera.LookAt = null;
+
+        if (startInNormalMode) EnterNormalMode(true);
+        else EnterBehindMode(true);
     }
 
     void LateUpdate()
     {
-        
-
-        if (!target) return;
-
-        // Mario 模式：根据目标的朝向缓慢拉近到角色后方
-        if (mode == CameraMode.Mario)
+        // 示例：按 Q 切换
+        if (Input.GetKeyDown(KeyCode.Q))
         {
-            Vector3 hFwd = target.forward; hFwd.y = 0f;
-            if (hFwd.sqrMagnitude > 0.0001f)
-            {
-                float targetYawFromMario = Mathf.Atan2(hFwd.x, hFwd.z) * Mathf.Rad2Deg;
-                // 插值影响到 desiredYaw，但仍保留分段旋转给玩家微调
-                desiredYaw = Mathf.LerpAngle(desiredYaw, targetYawFromMario, marioHeadingFollow * Time.deltaTime * 3f);
-            }
+            if (!inBehindMode) EnterBehindMode(false);
+            else EnterNormalMode(false);
         }
 
-        // 平滑 yaw 和距离
-        currentYaw = Mathf.LerpAngle(currentYaw, desiredYaw, Time.deltaTime * yawSmooth);
-        currentDistance = Mathf.Lerp(currentDistance, desiredDistance, Time.deltaTime * zoomSmooth);
-
-        // 计算理想位置
-        Quaternion yawRot = Quaternion.Euler(0f, currentYaw, 0f);
-        Quaternion pitchRot = Quaternion.Euler(pitch, 0f, 0f);
-
-        Vector3 focus = target.position + targetOffset;
-        Vector3 desiredCamPos = focus + yawRot * (pitchRot * (Vector3.back * currentDistance));
-
-        // 碰撞修正
-        Vector3 correctedPos = ResolveCollision(focus, desiredCamPos, out bool blocked);
-
-        // 若被挡，略微抬升 + 自动加一点 pitch
-        if (blocked)
+        // 连续跟随朝向（可选）
+        if (inBehindMode && continuousFollowRotation && !isBlending)
         {
-            correctedPos += Vector3.up * raiseWhenBlocked;
-            float targetPitch = Mathf.Clamp(pitch + pitchAutoLiftWhenClose, pitchMin, pitchMax);
-            pitch = Mathf.Lerp(pitch, targetPitch, Time.deltaTime * 4f);
+            Quaternion cur = cmCamera.transform.rotation;
+            Quaternion trg = followTarget.rotation;
+            float t = 1f - Mathf.Exp(-8f * Time.deltaTime);
+            cmCamera.transform.rotation = Quaternion.Slerp(cur, trg, t);
         }
-
-        // 平滑移动与朝向
-        transform.position = Vector3.Lerp(transform.position, correctedPos, Time.deltaTime * positionSmooth);
-        Vector3 lookDir = (focus - transform.position);
-        if (lookDir.sqrMagnitude < 0.0001f) lookDir = transform.forward;
-        Quaternion lookRot = Quaternion.LookRotation(lookDir.normalized, Vector3.up);
-        transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * rotationSmooth);
     }
 
-    private void UpdateInputs()
+    public void EnterNormalMode(bool immediate)
     {
-        // 分段旋转
-        if (Input.GetKeyDown(rotateLeftKey))
-            desiredYaw -= yawStep;
-        if (Input.GetKeyDown(rotateRightKey))
-            desiredYaw += yawStep;
+        inBehindMode = false;
+        StopAllCoroutines();
 
-        // 多档缩放
-        if (Input.GetKeyDown(zoomInKey))
-        {
-            // 更近一档
-            if (Mathf.Approximately(desiredDistance, farDist))
-                desiredDistance = mediumDist;
-            else if (Mathf.Approximately(desiredDistance, mediumDist))
-                desiredDistance = nearDist;
-        }
-        if (Input.GetKeyDown(zoomOutKey))
-        {
-            // 更远一档
-            if (Mathf.Approximately(desiredDistance, nearDist))
-                desiredDistance = mediumDist;
-            else if (Mathf.Approximately(desiredDistance, mediumDist))
-                desiredDistance = farDist;
-        }
+        // CM3：通过 TrackerSettings 设置绑定模式（struct，需要回写）
+        var ts = follow.TrackerSettings;
+        ts.BindingMode = BindingMode.WorldSpace;            // 世界空间：不随目标旋转
+        follow.TrackerSettings = ts;
 
-        // 切换模式
-        if (Input.GetKeyDown(toggleModeKey))
+        if (immediate)
         {
-            mode = (mode == CameraMode.Lakitu) ? CameraMode.Mario : CameraMode.Lakitu;
+            follow.FollowOffset = normalOffset;
         }
-
-        // 可选：微调俯仰
-        if (Input.GetKey(pitchUpKey)) pitch = Mathf.Clamp(pitch + 45f * Time.deltaTime, pitchMin, pitchMax);
-        if (Input.GetKey(pitchDownKey)) pitch = Mathf.Clamp(pitch - 45f * Time.deltaTime, pitchMin, pitchMax);
+        else
+        {
+            StartCoroutine(LerpOffset(follow.FollowOffset, normalOffset, moveLerpTime));
+        }
     }
 
-    private Vector3 ResolveCollision(Vector3 focus, Vector3 desiredPos, out bool blocked)
+    public void EnterBehindMode(bool immediate)
     {
-        blocked = false;
-        Vector3 dir = desiredPos - focus;
-        float dist = dir.magnitude;
-        if (dist <= 0.0001f) return desiredPos;
+        inBehindMode = true;
+        StopAllCoroutines();
 
-        dir /= dist;
+        // 目标空间（随目标旋转），保持“身后”关系
+        var ts = follow.TrackerSettings;
+        ts.BindingMode = BindingMode.LockToTargetWithWorldUp;  // 忽略俯仰和滚转，只跟随 yaw
+        follow.TrackerSettings = ts;
 
-        // SphereCast from focus towards desiredPos
-        if (Physics.SphereCast(focus, sphereRadius, dir, out RaycastHit hit, dist, collisionMask, QueryTriggerInteraction.Ignore))
+        if (immediate)
         {
-            float safeDist = Mathf.Max(hit.distance - wallPadding, minDistance);
-            Vector3 pos = focus + dir * safeDist;
-            blocked = true;
-            return pos;
+            follow.FollowOffset = behindOffset;
+            cmCamera.transform.rotation = followTarget.rotation;
         }
-
-        return desiredPos;
+        else
+        {
+            StartCoroutine(LerpOffset(follow.FollowOffset, behindOffset, moveLerpTime));
+            StartCoroutine(LerpRotation(cmCamera.transform.rotation, followTarget.rotation, rotSnapLerpTime));
+        }
     }
 
-  
+    private System.Collections.IEnumerator LerpOffset(Vector3 from, Vector3 to, float time)
+    {
+        isBlending = true;
+        float t = 0f;
+        time = Mathf.Max(0.0001f, time);
+        while (t < 1f)
+        {
+            t += Time.deltaTime / time;
+            follow.FollowOffset = Vector3.Lerp(from, to, Mathf.SmoothStep(0f, 1f, t));
+            yield return null;
+        }
+        isBlending = false;
+    }
+
+    private System.Collections.IEnumerator LerpRotation(Quaternion from, Quaternion to, float time)
+    {
+        isBlending = true;
+        float t = 0f;
+        time = Mathf.Max(0.0001f, time);
+        while (t < 1f)
+        {
+            t += Time.deltaTime / time;
+            cmCamera.transform.rotation = Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, t));
+            yield return null;
+        }
+        isBlending = false;
+    }
 }
