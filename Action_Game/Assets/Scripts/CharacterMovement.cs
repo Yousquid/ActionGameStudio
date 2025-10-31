@@ -13,7 +13,6 @@ public class CharacterMovement : MonoBehaviour
 
     public Transform camera;
 
-    public bool isGround;
 
     private MeshRenderer mesh;
 
@@ -32,7 +31,7 @@ public class CharacterMovement : MonoBehaviour
     }
 
     public enum GestureState
-    { 
+    {
         Stand,
         Counch,
         Jump
@@ -40,6 +39,42 @@ public class CharacterMovement : MonoBehaviour
 
     public SpeedState characterMoveState;
     public GestureState characterGestureState;
+
+    public float playerHeight;
+    public LayerMask groundLayer; // LayerMask for ground detection
+
+    [Header("JumpSettings")]
+    public bool isGround;
+    public bool isJumping = false;
+    public bool hasJumped = false;
+    public float jumpForce = 5f;
+    public float gravity = 10f;
+    public float maxJumpTime = .4f;
+    public float holdJumpTimer = 0f;
+
+    [Header("SecondJumpSettings")]
+    public float secondJumpForce = 5f;
+    public float Secondgravity = 10f;
+    public float secondMaxJumpTime = .4f;
+    public float seondHoldJumpTimer = 0f;
+
+    [Header("ThirdJumpSettings")]
+    public float thirdJumpForce = 5f;
+    public float thirdgravity = 10f;
+    public float thirdMaxJumpTime = .4f;
+    public float thirdHoldJumpTimer = 0f;
+    public float thirdJumpWindow = 1.0f;
+    public bool thirdWindowActive = false;
+    private float thirdWindowTimer = 0f;
+
+    public int currentJumpCount = 0;
+
+
+    public float secondJumpWindow = 1.0f;   
+    public bool secondWindowActive = false;
+    private float secondWindowTimer = 0f;
+
+    private float ignoreGroundTimer = 0;
 
     void Start()
     {
@@ -54,9 +89,13 @@ public class CharacterMovement : MonoBehaviour
     void Update()
     {
         //SetCameraRotationWhileIdle();
+        GroundCheck();
         ReadCameraBasis();
         InputDetection();
         StateDetection();
+        JumpDetection();
+
+        
     }
 
     void ReadCameraBasis()
@@ -79,12 +118,7 @@ public class CharacterMovement : MonoBehaviour
 
     }
 
-    void SetCameraRotationWhileIdle()
-    {
-        if (characterMoveState != SpeedState.Static) return;
-
-        camera.rotation = Quaternion.LookRotation(transform.forward, transform.up);
-    }
+   
     void StateDetection()
     {
         if (rb.linearVelocity.magnitude > 0f && rb.linearVelocity.magnitude <= 4f)
@@ -112,6 +146,112 @@ public class CharacterMovement : MonoBehaviour
             crounchObject.SetActive(false);
         }
     }
+
+    void JumpDetection()
+    {
+        if (Input.GetKeyDown(KeyCode.Space) && isGround)
+        {
+            isJumping = true;
+            holdJumpTimer = 0f;
+
+            hasJumped = true;
+
+
+            Vector3 v = rb.linearVelocity;
+            v.y = 0f;
+            rb.linearVelocity = v;
+
+            Vector3 jumpVector = Vector3.zero;
+
+            if (!secondWindowActive)
+            {
+                jumpVector = Vector3.up * jumpForce;
+                currentJumpCount += 1;
+
+
+            }
+            else if (secondWindowActive)
+            {
+                jumpVector = Vector3.up * secondJumpForce;
+                currentJumpCount += 1;
+
+            }
+            else if (thirdWindowActive)
+            {
+                jumpVector = Vector3.up * thirdJumpForce;
+                currentJumpCount = 0;
+            }
+
+            rb.AddForce(jumpVector, ForceMode.Impulse);
+        }
+
+        if (isJumping && Input.GetKey(KeyCode.Space))
+        {
+            holdJumpTimer += Time.deltaTime;
+        }
+        if (isJumping && (Input.GetKeyUp(KeyCode.Space) || holdJumpTimer >= maxJumpTime))
+        {
+            
+            isJumping = false;
+        }
+
+        if (!isJumping && !isGround)
+        {
+            Vector3 GravityVector = Vector3.down * gravity;
+            rb.AddForce(GravityVector, ForceMode.Acceleration);
+        }
+    }
+
+   
+    void GroundCheck()
+    {
+        isGround = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.05f, groundLayer);
+
+        if (hasJumped)
+        {
+            ignoreGroundTimer += Time.deltaTime;
+        }
+
+        if (isGround && ignoreGroundTimer >= 0.08f)
+        {
+            isJumping = false;
+            ignoreGroundTimer = 0;
+            hasJumped = false;
+
+            if (currentJumpCount == 1)
+            {
+                secondWindowActive = true;
+                secondWindowTimer = secondJumpWindow;
+            }
+            if (currentJumpCount == 2)
+            {
+                thirdWindowActive = true;
+                thirdWindowTimer = secondJumpWindow;
+            }
+        }
+
+        if (secondWindowActive)
+        {
+            secondWindowTimer -= Time.deltaTime;
+            if (secondWindowTimer <= 0f)
+            {
+                secondWindowActive = false;
+                currentJumpCount = 0;
+            }
+        }
+
+        if (thirdWindowActive)
+        {
+            thirdWindowTimer -= Time.deltaTime;
+            if (thirdWindowTimer <= 0f)
+            {
+                thirdWindowActive = false;
+                currentJumpCount = 0;
+            }
+        }
+    }
+
+   
     void CrounchDetection()
     {
         if (Input.GetKey(KeyCode.LeftShift))
@@ -196,19 +336,9 @@ public class CharacterMovement : MonoBehaviour
     }
     }
 
-    private Vector3 Flat(Vector3 v)
-    {
-        v.y = 0f;
-        if (v.sqrMagnitude > 0f) v.Normalize();
-        return v;
-    }
-    
+  
 
-    private static float DeltaAngle(float fromDeg, float toDeg)
-    {
-        float d = Mathf.DeltaAngle(fromDeg, toDeg);
-        return d;
-    }
+    
     void RotateCharacterWhileWalkAndRun()
     {
         if (characterMoveState != SpeedState.Walk && characterMoveState != SpeedState.Run)
@@ -279,8 +409,10 @@ public class CharacterMovement : MonoBehaviour
         }
         else
         {
-            rb.linearVelocity = Vector3.zero;
-            //cameraRotationControllor.Damping = .2f;
+            Vector3 v = rb.linearVelocity;
+            v.x = 0f;
+            v.z = 0f;
+            rb.linearVelocity = v;
 
         }
 
@@ -292,3 +424,4 @@ public class CharacterMovement : MonoBehaviour
 
     }
 }
+

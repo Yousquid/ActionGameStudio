@@ -1164,22 +1164,13 @@ MonoBehaviour:
   isJumping: 0
   hasJumped: 0
   jumpForce: 6.3
-  gravity: 3.5
+  gravity: 10
   maxJumpTime: 0.3
   holdJumpTimer: 0
-  secondJumpForce: 8.5
+  secondJumpForce: 5
   Secondgravity: 10
   secondMaxJumpTime: 0.4
   seondHoldJumpTimer: 0
-  thirdJumpForce: 14
-  thirdgravity: 10
-  thirdMaxJumpTime: 0.4
-  thirdHoldJumpTimer: 0
-  thirdJumpWindow: 0.2
-  thirdWindowActive: 0
-  currentJumpCount: 0
-  secondJumpWindow: 0.25
-  secondWindowActive: 0
 --- !u!54 &1845719057
 Rigidbody:
   m_ObjectHideFlags: 0
