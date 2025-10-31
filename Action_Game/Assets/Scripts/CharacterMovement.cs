@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Unity.Cinemachine;
 
 public class CharacterMovement : MonoBehaviour
 {
@@ -7,6 +8,8 @@ public class CharacterMovement : MonoBehaviour
     public float maxSpeed = 12f;         // 最大速度
     public float deceleration = 8f;     // 松开按键时的减速度
     public float rotationSpeed = 420f;   // 转向速度（用于让角色朝向移动方向）
+
+    public CinemachineRotateWithFollowTarget cameraRotationControllor;
 
     public Transform camera;
 
@@ -47,7 +50,7 @@ public class CharacterMovement : MonoBehaviour
 
     void Update()
     {
-        SetCameraRotationWhileIdle();
+        //SetCameraRotationWhileIdle();
         ReadCameraBasis();
         InputDetection();
         StateDetection();
@@ -233,11 +236,14 @@ public class CharacterMovement : MonoBehaviour
     {
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
         {
+            cameraRotationControllor.Damping = 4.6f;
             rb.AddForce(transform.forward * acceleration, ForceMode.Acceleration);
         }
         else
         {
             rb.linearVelocity = Vector3.zero;
+            //cameraRotationControllor.Damping = .2f;
+
         }
 
 
