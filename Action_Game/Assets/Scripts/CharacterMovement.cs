@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Unity.Cinemachine;
-
+using System.Collections;
 public class CharacterMovement : MonoBehaviour
 {
     public float acceleration = 10f;    // 加速度
@@ -54,18 +54,35 @@ public class CharacterMovement : MonoBehaviour
 
     [Header("SecondJumpSettings")]
     public float secondJumpForce = 5f;
-    public float Secondgravity = 10f;
     public float secondMaxJumpTime = .4f;
     public float seondHoldJumpTimer = 0f;
 
     [Header("ThirdJumpSettings")]
     public float thirdJumpForce = 5f;
-    public float thirdgravity = 10f;
     public float thirdMaxJumpTime = .4f;
     public float thirdHoldJumpTimer = 0f;
     public float thirdJumpWindow = 1.0f;
     public bool thirdWindowActive = false;
     private float thirdWindowTimer = 0f;
+
+    [Header("BackJumpSettings")]
+    public float backJumpForce = 12f;
+    public float backJumpHorizontalForce = 5f;
+    public float backForceDuration = 0.25f;
+    public AnimationCurve horizontalForceCurve;   // 力曲线（0~1之间）
+    public bool isBackJumping = false;
+
+    [Header("LongJumpSettings")]
+    public float longJumpForce = 7f;
+    public float longJumpHorizontalForce = 300f;
+    public float longJumpForceDuration = 0.25f;
+    public AnimationCurve longJumpHorizontalForceCurve;   // 力曲线（0~1之间）
+    public bool isLongJumping = false;
+    public float longJumpTimer = 0f;
+    public float longJumpWindow = .17f;
+    private bool longJumpWindowActivate = false;
+    private bool longJumpWindowActivateTwo = false;
+
 
     public int currentJumpCount = 0;
 
@@ -94,8 +111,9 @@ public class CharacterMovement : MonoBehaviour
         InputDetection();
         StateDetection();
         JumpDetection();
+        LongJumpWindowTimer();
 
-        
+
     }
 
     void ReadCameraBasis()
@@ -121,7 +139,7 @@ public class CharacterMovement : MonoBehaviour
    
     void StateDetection()
     {
-        if (rb.linearVelocity.magnitude > 0f && rb.linearVelocity.magnitude <= 4f)
+        if (rb.linearVelocity.magnitude > 0f && rb.linearVelocity.magnitude <= 5f)
         {
             characterMoveState = SpeedState.Walk;
         }
@@ -130,7 +148,7 @@ public class CharacterMovement : MonoBehaviour
             characterMoveState = SpeedState.Static;
 
         }
-        else if (rb.linearVelocity.magnitude >= 4f)
+        else if (rb.linearVelocity.magnitude >= 5f)
         {
             characterMoveState = SpeedState.Run;
 
@@ -153,37 +171,53 @@ public class CharacterMovement : MonoBehaviour
         {
             isJumping = true;
             holdJumpTimer = 0f;
-
             hasJumped = true;
 
-
-            Vector3 v = rb.linearVelocity;
-            v.y = 0f;
-            rb.linearVelocity = v;
+            // 清竖直速度
+            Vector3 v = rb.linearVelocity; v.y = 0f; rb.linearVelocity = v;
 
             Vector3 jumpVector = Vector3.zero;
 
-            if (!secondWindowActive)
+            if (characterGestureState != GestureState.Counch)
             {
-                jumpVector = Vector3.up * jumpForce;
-                currentJumpCount += 1;
+                if (thirdWindowActive)
+                {
+                    jumpVector = Vector3.up * thirdJumpForce;
+                    currentJumpCount = 0;           // 触发 third 后把计数清零（按你原方案）
+                    thirdWindowActive = false;      // 消耗第三段窗口
+                    secondWindowActive = false;     // 保险：也关掉第二段窗口
+                }
+                else if (secondWindowActive)
+                {
+                    jumpVector = Vector3.up * secondJumpForce;
+                    currentJumpCount += 1;          // 从 1 → 2
+                    secondWindowActive = false;     // 消耗第二段窗口
+                }
+                else
+                {
+                    jumpVector = Vector3.up * jumpForce;
+                    currentJumpCount = 1;           // 普通起跳开始新链：0 → 1
+                }
 
+                rb.AddForce(jumpVector, ForceMode.Impulse);
 
             }
-            else if (secondWindowActive)
+            else if (characterGestureState == GestureState.Counch && !longJumpWindowActivate)
             {
-                jumpVector = Vector3.up * secondJumpForce;
-                currentJumpCount += 1;
+                StartCoroutine(DoBackstep());
+                //jumpVector = Vector3.up * backJumpForce;
+                //Vector3 backDistance = -Vector3.forward * backJumpHorizontalForce;
+                //rb.AddForce(jumpVector, ForceMode.Impulse);
 
             }
-            else if (thirdWindowActive)
+            else if (characterGestureState == GestureState.Counch && longJumpWindowActivate)
             {
-                jumpVector = Vector3.up * thirdJumpForce;
-                currentJumpCount = 0;
+                StartCoroutine(DoLongstep());
             }
-
-            rb.AddForce(jumpVector, ForceMode.Impulse);
+            
         }
+
+
 
         if (isJumping && Input.GetKey(KeyCode.Space))
         {
@@ -191,7 +225,6 @@ public class CharacterMovement : MonoBehaviour
         }
         if (isJumping && (Input.GetKeyUp(KeyCode.Space) || holdJumpTimer >= maxJumpTime))
         {
-            
             isJumping = false;
         }
 
@@ -202,41 +235,125 @@ public class CharacterMovement : MonoBehaviour
         }
     }
 
-   
+    IEnumerator DoBackstep()
+    {
+        isBackJumping = true;
+
+        Vector3 v = rb.linearVelocity;
+        v.y = 0;
+        rb.linearVelocity = v;
+
+       
+        Vector3 jumpVector = Vector3.up * backJumpForce;
+        rb.AddForce(jumpVector, ForceMode.Impulse);
+
+       
+        float timer = 0f;
+        while (timer < backForceDuration)
+        {
+            timer += Time.deltaTime;
+            float t = Mathf.Clamp01(timer / backForceDuration);
+
+            // 力曲线（默认线性，如果没设置则直接线性增长）
+            float forceFactor = horizontalForceCurve != null ? horizontalForceCurve.Evaluate(t) : t;
+
+            Vector3 backDir = -transform.forward;
+            Vector3 horizontalForce = backDir * backJumpHorizontalForce * forceFactor;
+
+            rb.AddForce(horizontalForce * Time.deltaTime, ForceMode.VelocityChange);
+
+            yield return null;
+        }
+
+        isBackJumping = false;
+
+    }
+
+    IEnumerator DoLongstep()
+    {
+        isLongJumping = true;
+
+        Vector3 v = rb.linearVelocity;
+        v.y = 0;
+        rb.linearVelocity = v;
+
+
+        Vector3 jumpVector = Vector3.up * longJumpForce;
+        rb.AddForce(jumpVector, ForceMode.Impulse);
+
+
+        float timer = 0f;
+        while (timer < longJumpForceDuration)
+        {
+            timer += Time.deltaTime;
+            float t = Mathf.Clamp01(timer / longJumpForceDuration);
+
+            // 力曲线（默认线性，如果没设置则直接线性增长）
+            float forceFactor = longJumpHorizontalForceCurve  != null ? longJumpHorizontalForceCurve.Evaluate(t) : t;
+
+            Vector3 backDir = transform.forward;
+            Vector3 horizontalForce = backDir * longJumpHorizontalForce * forceFactor;
+
+            rb.AddForce(horizontalForce * Time.deltaTime, ForceMode.VelocityChange);
+
+            yield return null;
+        }
+
+        isLongJumping = false;
+
+    }
     void GroundCheck()
     {
-        isGround = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.05f, groundLayer);
+        isGround = Physics.Raycast(
+        transform.position, Vector3.down,
+        playerHeight * 0.5f + 0.05f, groundLayer
+    );
 
-        if (hasJumped)
+        if (!isGround)
         {
-            ignoreGroundTimer += Time.deltaTime;
+            characterGestureState = GestureState.Jump;
         }
+        if (hasJumped)
+            ignoreGroundTimer += Time.deltaTime;
 
         if (isGround && ignoreGroundTimer >= 0.08f)
         {
             isJumping = false;
-            ignoreGroundTimer = 0;
+            ignoreGroundTimer = 0f;
             hasJumped = false;
+            characterGestureState = GestureState.Stand;
+
 
             if (currentJumpCount == 1)
             {
+                // 刚做完第1跳，开第2段窗口
                 secondWindowActive = true;
                 secondWindowTimer = secondJumpWindow;
+                thirdWindowActive = false; // 保险
             }
-            if (currentJumpCount == 2)
+            else if (currentJumpCount == 2 && characterMoveState == SpeedState.Run)
             {
+                // 刚做完第2跳，开第3段窗口
                 thirdWindowActive = true;
-                thirdWindowTimer = secondJumpWindow;
+                thirdWindowTimer = thirdJumpWindow; //
+                secondWindowActive = false;            // 
+            }
+            else
+            {
+                // 其它情况落地（比如第三段完成后或超时后）不自动开窗口
             }
         }
 
+        // 窗口倒计时与过期清理
         if (secondWindowActive)
         {
             secondWindowTimer -= Time.deltaTime;
             if (secondWindowTimer <= 0f)
             {
                 secondWindowActive = false;
-                currentJumpCount = 0;
+                // 只有当第三段窗口不在时，才把链条清零（避免刚转入 third 的瞬间被清零）
+                if (!thirdWindowActive)
+                    currentJumpCount = 0;
             }
         }
 
@@ -266,6 +383,23 @@ public class CharacterMovement : MonoBehaviour
         CrounchChange();
     }
 
+    void LongJumpWindowTimer()
+    {
+        
+            longJumpTimer -= Time.deltaTime;
+
+
+        if (longJumpTimer > 0)
+        {
+            longJumpWindowActivate = true;
+        }
+        else
+        {
+            longJumpWindowActivate = false;
+            longJumpWindowActivateTwo = false;
+        }
+    }
+
     void CrounchChange()
     {
         if (characterGestureState == GestureState.Counch)
@@ -274,15 +408,29 @@ public class CharacterMovement : MonoBehaviour
             headIndicator.SetActive(false);
             crounchObject.SetActive(true);
 
-            if (rb.linearVelocity.magnitude != 0)
+            if (!longJumpWindowActivateTwo)
+            {
+                longJumpTimer = longJumpWindow;
+                longJumpWindowActivateTwo = true;
+            }
+            
+
+            if (rb.linearVelocity.magnitude != 0 && isGround)
             {
                 Vector3 currentVelocity = rb.linearVelocity;
 
                 float deceleration = 8.5f;
 
-                Vector3 newVelocity = Vector3.MoveTowards(
+                Vector3 newVelocity;
+
+                newVelocity = currentVelocity;
+
+                newVelocity.x = 0;
+                newVelocity.z = 0;
+
+                Vector3 renewVelocity = Vector3.MoveTowards(
                     currentVelocity,
-                    Vector3.zero,
+                    newVelocity,
                     deceleration * Time.fixedDeltaTime
                 );
 
@@ -296,7 +444,10 @@ public class CharacterMovement : MonoBehaviour
         if ((Input.GetKey(KeyCode.A) && Input.GetKeyDown(KeyCode.D)) ||
           (Input.GetKey(KeyCode.D) && Input.GetKeyDown(KeyCode.A)))
         {
-            rb.linearVelocity = Vector3.zero;
+            Vector3 v = rb.linearVelocity;
+            v.x = 0f;
+            v.z = 0f;
+            rb.linearVelocity = v;
 
 
 
@@ -306,7 +457,10 @@ public class CharacterMovement : MonoBehaviour
         if ((Input.GetKey(KeyCode.W) && Input.GetKeyDown(KeyCode.S)) ||
             (Input.GetKey(KeyCode.S) && Input.GetKeyDown(KeyCode.W)))
         {
-            rb.linearVelocity = Vector3.zero;
+            Vector3 v = rb.linearVelocity;
+            v.x = 0f;
+            v.z = 0f;
+            rb.linearVelocity = v;
 
 
         }
@@ -380,9 +534,12 @@ public class CharacterMovement : MonoBehaviour
 
         if (oppositeHeld)
         {
-            rb.linearVelocity = Vector3.zero;           // 清零
-                                                        // 可选：一点阻尼，防抖更稳
-                                                        // rb.linearVelocity = Vector3.MoveTowards(rb.linearVelocity, Vector3.zero, deceleration * Time.fixedDeltaTime);
+            Vector3 v = rb.linearVelocity;
+            v.x = 0f;
+            v.z = 0f;
+            rb.linearVelocity = v;          // 清零
+                                            // 可选：一点阻尼，防抖更稳
+                                            // rb.linearVelocity = Vector3.MoveTowards(rb.linearVelocity, Vector3.zero, deceleration * Time.fixedDeltaTime);
             return;                                     // 关键：不要再加力了
         }
 
@@ -394,6 +551,10 @@ public class CharacterMovement : MonoBehaviour
     {
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
         {
+            if (isBackJumping || isLongJumping)
+            { 
+                return;
+            }
             cameraRotationControllor.Damping = 4.6f;
 
             if (characterGestureState == GestureState.Counch)
