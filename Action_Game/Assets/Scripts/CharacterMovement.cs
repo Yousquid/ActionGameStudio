@@ -196,7 +196,7 @@ public class CharacterMovement : MonoBehaviour
                 else
                 {
                     jumpVector = Vector3.up * jumpForce;
-                    currentJumpCount = 1;           // 普通起跳开始新链：0 → 1
+                    currentJumpCount = 1;         
                 }
 
                 rb.AddForce(jumpVector, ForceMode.Impulse);
