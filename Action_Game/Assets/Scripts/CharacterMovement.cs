@@ -202,14 +202,6 @@ public class CharacterMovement : MonoBehaviour
                 rb.AddForce(jumpVector, ForceMode.Impulse);
 
             }
-            else if (characterGestureState == GestureState.Counch && !longJumpWindowActivate)
-            {
-                StartCoroutine(DoBackstep());
-                //jumpVector = Vector3.up * backJumpForce;
-                //Vector3 backDistance = -Vector3.forward * backJumpHorizontalForce;
-                //rb.AddForce(jumpVector, ForceMode.Impulse);
-
-            }
             else if (characterGestureState == GestureState.Counch && longJumpWindowActivate)
             {
                 StartCoroutine(DoLongstep());
@@ -228,7 +220,7 @@ public class CharacterMovement : MonoBehaviour
             isJumping = false;
         }
 
-        if (!isJumping && !isGround)
+        if (!isJumping && !isGround && !isLongJumping)
         {
             Vector3 GravityVector = Vector3.down * gravity;
             rb.AddForce(GravityVector, ForceMode.Acceleration);
@@ -393,7 +385,7 @@ public class CharacterMovement : MonoBehaviour
         {
             longJumpWindowActivate = true;
         }
-        else
+        else if (longJumpTimer <= 0 && characterGestureState!= GestureState.Counch)
         {
             longJumpWindowActivate = false;
             longJumpWindowActivateTwo = false;
@@ -415,7 +407,7 @@ public class CharacterMovement : MonoBehaviour
             }
             
 
-            if (rb.linearVelocity.magnitude != 0 && isGround)
+            if (rb.linearVelocity.magnitude != 0 && isGround && longJumpTimer <= 0)
             {
                 Vector3 currentVelocity = rb.linearVelocity;
 

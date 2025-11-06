@@ -3945,21 +3945,30 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   isBackJumping: 0
-  longJumpForce: 10.5
-  longJumpHorizontalForce: 45
-  longJumpForceDuration: 1.3
+  longJumpForce: 8.5
+  longJumpHorizontalForce: 15
+  longJumpForceDuration: 0.87
   longJumpHorizontalForceCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
-      time: 0
-      value: 0
+      time: -0.2927971
+      value: 0.41970825
       inSlope: 2
       outSlope: 2
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
       outWeight: 0
+    - serializedVersion: 3
+      time: 0.6900557
+      value: 0.7554804
+      inSlope: 0.66527665
+      outSlope: 0.66527665
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
     - serializedVersion: 3
       time: 1
       value: 1
