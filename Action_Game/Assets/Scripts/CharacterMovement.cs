@@ -82,6 +82,7 @@ public class CharacterMovement : MonoBehaviour
     public float longJumpWindow = .17f;
     public bool longJumpWindowActivate = false;
     private bool longJumpWindowActivateTwo = false;
+    public bool isLongBoosting = false; // 新增：推进阶段
 
 
     public int currentJumpCount = 0;
@@ -272,6 +273,8 @@ public class CharacterMovement : MonoBehaviour
 
         Vector3 v = rb.linearVelocity;
         v.y = 0;
+        v.x = v.x/3;
+        v.z = v.z/3;
         rb.linearVelocity = v;
 
 
@@ -527,6 +530,11 @@ public class CharacterMovement : MonoBehaviour
     {
         bool oppositeHeld = (Input.GetKey(KeyCode.A) && Input.GetKey(KeyCode.D)) ||
                        (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.S));
+
+        if (isBackJumping || isLongJumping)
+        {
+            return;
+        }
 
         if (oppositeHeld)
         {
