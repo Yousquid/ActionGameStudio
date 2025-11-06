@@ -80,7 +80,7 @@ public class CharacterMovement : MonoBehaviour
     public bool isLongJumping = false;
     public float longJumpTimer = 0f;
     public float longJumpWindow = .17f;
-    private bool longJumpWindowActivate = false;
+    public bool longJumpWindowActivate = false;
     private bool longJumpWindowActivateTwo = false;
 
 
@@ -196,10 +196,15 @@ public class CharacterMovement : MonoBehaviour
                 else
                 {
                     jumpVector = Vector3.up * jumpForce;
-                    currentJumpCount = 1;         
+                    currentJumpCount = 1;
                 }
 
                 rb.AddForce(jumpVector, ForceMode.Impulse);
+
+            }
+            else if (characterGestureState == GestureState.Counch && !longJumpWindowActivate)
+            {
+                StartCoroutine(DoBackstep());
 
             }
             else if (characterGestureState == GestureState.Counch && longJumpWindowActivate)
@@ -363,33 +368,32 @@ public class CharacterMovement : MonoBehaviour
    
     void CrounchDetection()
     {
-        if (Input.GetKey(KeyCode.LeftShift))
+        if (Input.GetKeyDown(KeyCode.LeftShift) && characterGestureState != GestureState.Jump)
         {
-            if (characterGestureState == GestureState.Jump) return;
-
             characterGestureState = GestureState.Counch;
 
+            longJumpTimer = longJumpWindow;
         }
-        else { characterGestureState = GestureState.Stand; }
+        else if (Input.GetKey(KeyCode.LeftShift))
+        {
+            characterGestureState = GestureState.Counch;
+        }
+        else
+        {
+            characterGestureState = GestureState.Stand;
+            longJumpTimer = 0f;
+            longJumpWindowActivate = false;
+        }
 
         CrounchChange();
     }
 
     void LongJumpWindowTimer()
     {
-        
+        if (longJumpTimer > 0f)
             longJumpTimer -= Time.deltaTime;
 
-
-        if (longJumpTimer > 0)
-        {
-            longJumpWindowActivate = true;
-        }
-        else if (longJumpTimer <= 0 && characterGestureState!= GestureState.Counch)
-        {
-            longJumpWindowActivate = false;
-            longJumpWindowActivateTwo = false;
-        }
+        longJumpWindowActivate = longJumpTimer > 0f;  // 直接由计时器决定
     }
 
     void CrounchChange()
