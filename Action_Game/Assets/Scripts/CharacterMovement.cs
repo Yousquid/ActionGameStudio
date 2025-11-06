@@ -34,7 +34,8 @@ public class CharacterMovement : MonoBehaviour
     {
         Stand,
         Counch,
-        Jump
+        Jump,
+        Rolling
     }
 
     public SpeedState characterMoveState;
@@ -93,6 +94,12 @@ public class CharacterMovement : MonoBehaviour
     private float secondWindowTimer = 0f;
 
     private float ignoreGroundTimer = 0;
+
+    [Header("RollingSettings")]
+    public GameObject rollingObject;
+    public bool isRolling = false;
+    public float maxRollingSpeed = 30f;
+    
 
     void Start()
     {
