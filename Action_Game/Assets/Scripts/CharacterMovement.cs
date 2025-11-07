@@ -120,6 +120,8 @@ public class CharacterMovement : MonoBehaviour
         StateDetection();
         JumpDetection();
         LongJumpWindowTimer();
+        StandChange();
+        RollingChange();
 
 
     }
@@ -139,9 +141,8 @@ public class CharacterMovement : MonoBehaviour
 
         StopCharacterWhileHoldingOppositeDirections();
         CrounchDetection();
-        StandChange();
         RotateCharacterWhileIdle();
-
+        RollingDetection();
     }
 
    
@@ -156,13 +157,35 @@ public class CharacterMovement : MonoBehaviour
             characterMoveState = SpeedState.Static;
 
         }
-        else if (rb.linearVelocity.magnitude >= 5f)
+        else if (rb.linearVelocity.magnitude >= 12f)
         {
             characterMoveState = SpeedState.Run;
 
         }
     }
 
+    void RollingDetection()
+    {
+        if (Input.GetKey(KeyCode.K) && characterMoveState == SpeedState.Run && characterGestureState != GestureState.Rolling)
+        {
+            characterGestureState = GestureState.Rolling;
+        }
+        else if (Input.GetKeyUp(KeyCode.K))
+        {
+            characterGestureState = GestureState.Stand;
+
+        }
+    }
+
+    void RollingChange()
+    {
+        if (characterGestureState == GestureState.Rolling)
+        {
+            mesh.enabled = false;
+            headIndicator.SetActive(false);
+            rollingObject.SetActive(true);
+        }
+    }
     void StandChange()
     {
         if (characterGestureState == GestureState.Stand)
@@ -233,11 +256,7 @@ public class CharacterMovement : MonoBehaviour
             isJumping = false;
         }
 
-        if (!isJumping && !isGround && !isLongJumping)
-        {
-            Vector3 GravityVector = Vector3.down * gravity;
-            rb.AddForce(GravityVector, ForceMode.Acceleration);
-        }
+        
     }
 
     IEnumerator DoBackstep()
@@ -533,8 +552,19 @@ public class CharacterMovement : MonoBehaviour
             return v.sqrMagnitude > 0f ? v.normalized : Vector3.zero;
         }
     }
+
+    private void ApplyGravity()
+    {
+        if (!isJumping && !isGround && !isLongJumping)
+        {
+            Vector3 GravityVector = Vector3.down * gravity;
+            rb.AddForce(GravityVector, ForceMode.Acceleration);
+        }
+    }
     void FixedUpdate()
     {
+        ApplyGravity();
+
         bool oppositeHeld = (Input.GetKey(KeyCode.A) && Input.GetKey(KeyCode.D)) ||
                        (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.S));
 
@@ -582,16 +612,19 @@ public class CharacterMovement : MonoBehaviour
         else
         {
             Vector3 v = rb.linearVelocity;
-            v.x = 0f;
-            v.z = 0f;
-            rb.linearVelocity = v;
+            Vector3 planar1 = new Vector3(v.x, 0f, v.z);
+            planar1 = Vector3.MoveTowards(planar1, Vector3.zero, deceleration * Time.fixedDeltaTime);
+            rb.linearVelocity = new Vector3(planar1.x, v.y, planar1.z);
 
         }
 
+        var S = rb.linearVelocity;
 
-        if (rb.linearVelocity.magnitude >= maxSpeed)
+        Vector3 planar = new Vector3(S.x, 0f, S.z);
+        if (planar.magnitude >= maxSpeed)
         {
-            rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
+            planar = planar.normalized * maxSpeed;
+            rb.linearVelocity = new Vector3(planar.x, S.y, planar.z);
         }
 
     }

@@ -3795,7 +3795,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!135 &1756757674
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -3881,14 +3881,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1756757673}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.39596283, y: -0, z: -0, w: 0.91826653}
-  m_LocalPosition: {x: -0.039, y: 0.073, z: 0.005}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.012, y: 0.073, z: 0.005}
   m_LocalScale: {x: 1.162556, y: 1.3835579, z: 1.162556}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 844708054}
   m_Father: {fileID: 1845719055}
-  m_LocalEulerAnglesHint: {x: 46.652, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1756757678
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4123,10 +4123,10 @@ MonoBehaviour:
   isJumping: 0
   hasJumped: 0
   jumpForce: 6.7
-  gravity: 3.5
+  gravity: 23
   maxJumpTime: 0.3
   holdJumpTimer: 0
-  secondJumpForce: 8
+  secondJumpForce: 11.5
   secondMaxJumpTime: 0.4
   seondHoldJumpTimer: 0
   thirdJumpForce: 18
@@ -4215,6 +4215,9 @@ MonoBehaviour:
   currentJumpCount: 0
   secondJumpWindow: 0.25
   secondWindowActive: 0
+  rollingObject: {fileID: 1756757673}
+  isRolling: 0
+  maxRollingSpeed: 30
 --- !u!54 &1845719057
 Rigidbody:
   m_ObjectHideFlags: 0
