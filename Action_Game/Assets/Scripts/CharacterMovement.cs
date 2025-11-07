@@ -397,13 +397,13 @@ public class CharacterMovement : MonoBehaviour
    
     void CrounchDetection()
     {
-        if (Input.GetKeyDown(KeyCode.LeftShift) && characterGestureState != GestureState.Jump)
+        if (Input.GetKeyDown(KeyCode.LeftShift) && isGround)
         {
             characterGestureState = GestureState.Counch;
 
             longJumpTimer = longJumpWindow;
         }
-        else if (Input.GetKey(KeyCode.LeftShift))
+        else if (Input.GetKey(KeyCode.LeftShift) && isGround)
         {
             characterGestureState = GestureState.Counch;
         }
@@ -592,7 +592,7 @@ public class CharacterMovement : MonoBehaviour
     {
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D))
         {
-            if (isBackJumping || isLongJumping)
+            if (isBackJumping || isLongJumping )
             { 
                 return;
             }
@@ -617,14 +617,36 @@ public class CharacterMovement : MonoBehaviour
             rb.linearVelocity = new Vector3(planar1.x, v.y, planar1.z);
 
         }
-
-        var S = rb.linearVelocity;
-
-        Vector3 planar = new Vector3(S.x, 0f, S.z);
-        if (planar.magnitude >= maxSpeed)
+        if (characterGestureState != GestureState.Rolling)
         {
-            planar = planar.normalized * maxSpeed;
-            rb.linearVelocity = new Vector3(planar.x, S.y, planar.z);
+            var S = rb.linearVelocity;
+
+            Vector3 planar = new Vector3(S.x, 0f, S.z);
+            if (planar.magnitude >= maxSpeed)
+            {
+                planar = planar.normalized * maxSpeed;
+                rb.linearVelocity = new Vector3(planar.x, S.y, planar.z);
+            }
+
+        }
+        else if (characterGestureState == GestureState.Rolling)
+        {
+            var S = rb.linearVelocity;
+
+            Vector3 planar = new Vector3(S.x, 0f, S.z);
+            if (planar.magnitude >= maxRollingSpeed)
+            {
+                planar = planar.normalized * maxRollingSpeed;
+                rb.linearVelocity = new Vector3(planar.x, S.y, planar.z);
+            }
+
+            if (isGround)
+            {
+                //Vector3 v = rb.linearVelocity;
+                //Vector3 planar1 = new Vector3(v.x, 0f, v.z);
+                //planar1 = Vector3.MoveTowards(planar1, Vector3.zero, deceleration * Time.fixedDeltaTime);
+                //rb.linearVelocity = new Vector3(planar1.x, v.y, planar1.z);
+            }
         }
 
     }
