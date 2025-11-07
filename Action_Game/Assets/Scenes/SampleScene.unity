@@ -4338,7 +4338,7 @@ MonoBehaviour:
   allowOverMaxRollingSpeed: 0
   fallingVelocity: 0
   speed: 0
-  rollingReleaseHopUp: 15
+  rollingReleaseHopUp: 11.5
   rollingReleaseHopForward: 6
   rollingReleaseHopCooldown: 0.2
 --- !u!54 &1845719057

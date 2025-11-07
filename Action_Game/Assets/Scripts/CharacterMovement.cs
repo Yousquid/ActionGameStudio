@@ -439,7 +439,7 @@ public class CharacterMovement : MonoBehaviour
         if (hasJumped) ignoreGroundTimer += Time.deltaTime;
 
         // —— 你的原落地处理（保持不变）——
-        if (isGround && ignoreGroundTimer >= 0.02f)
+        if (isGround && ignoreGroundTimer >= 0.08f)
         {
             isJumping = false;
             ignoreGroundTimer = 0f;
