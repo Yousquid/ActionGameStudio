@@ -99,7 +99,22 @@ public class CharacterMovement : MonoBehaviour
     public GameObject rollingObject;
     public bool isRolling = false;
     public float maxRollingSpeed = 30f;
-    
+    public Collider rollingCollider;
+    public CapsuleCollider standCollider;
+
+    [Header("Rolling Landing Boost")]
+    public float rollingLandingBoostMultiplier = 0.6f;   // 下落速度转化为前冲的倍率
+    public float rollingLandingBoostMinFall = 4f;        // 触发前冲的最小下落速度阈值（绝对值）
+    public float rollingLandingBoostMax = 20f;           // 前冲速度上限（可根据手感调大/调小）
+    public bool allowOverMaxRollingSpeed = false;        // 是否允许瞬间超过 maxRollingSpeed（若要严格限制可设 false）
+
+    // 运行时临时变量
+    private bool wasGrounded = false;                    // 记录上一帧是否在地面
+    private float lastVerticalSpeed = 0f;
+
+
+    public float fallingVelocity;
+    public float speed;
 
     void Start()
     {
@@ -123,7 +138,10 @@ public class CharacterMovement : MonoBehaviour
         StandChange();
         RollingChange();
 
-
+        fallingVelocity = rb.linearVelocity.y;
+        var A = rb.linearVelocity;
+        A.y = 0;
+        speed = A.magnitude;
     }
 
     void ReadCameraBasis()
@@ -166,7 +184,7 @@ public class CharacterMovement : MonoBehaviour
 
     void RollingDetection()
     {
-        if (Input.GetKey(KeyCode.K) && characterMoveState == SpeedState.Run && characterGestureState != GestureState.Rolling)
+        if (Input.GetKey(KeyCode.K) && fallingVelocity <= -12f && characterGestureState != GestureState.Rolling)
         {
             characterGestureState = GestureState.Rolling;
         }
@@ -184,6 +202,8 @@ public class CharacterMovement : MonoBehaviour
             mesh.enabled = false;
             headIndicator.SetActive(false);
             rollingObject.SetActive(true);
+            standCollider.isTrigger = true;
+            rollingCollider.isTrigger = false;
         }
     }
     void StandChange()
@@ -194,6 +214,8 @@ public class CharacterMovement : MonoBehaviour
             headIndicator.SetActive(true);
             crounchObject.SetActive(false);
             rollingObject.SetActive(false);
+            standCollider.isTrigger = false;
+            rollingCollider.isTrigger = true;
         }
     }
 
@@ -231,7 +253,16 @@ public class CharacterMovement : MonoBehaviour
                     currentJumpCount = 1;
                 }
 
-                rb.AddForce(jumpVector, ForceMode.Impulse);
+                if (characterGestureState != GestureState.Rolling)
+                {
+                    rb.AddForce(jumpVector, ForceMode.Impulse);
+
+                }
+                else
+                {
+                    rb.AddForce(jumpVector/2, ForceMode.Impulse);
+
+                }
 
             }
             
@@ -300,9 +331,8 @@ public class CharacterMovement : MonoBehaviour
         isLongJumping = true;
 
         Vector3 v = rb.linearVelocity;
-        v.y = 0;
-        v.x = v.x/3;
-        v.z = v.z/3;
+        v.x = v.x/2;
+        v.z = v.z/2;
         rb.linearVelocity = v;
 
 
@@ -332,54 +362,54 @@ public class CharacterMovement : MonoBehaviour
     }
     void GroundCheck()
     {
-        isGround = Physics.Raycast(
-        transform.position, Vector3.down,
-        playerHeight * 0.5f + 0.05f, groundLayer
-    );
+        // 地面检测
+        bool nowGround = Physics.Raycast(
+            transform.position, Vector3.down,
+            playerHeight * 0.5f + 0.05f, groundLayer
+        );
+        isGround = nowGround;
 
+        // 记录空中时的竖直速度（用于落地瞬间计算）
         if (!isGround)
         {
-            characterGestureState = GestureState.Jump;
+            // 记录最近一帧的竖直速度（通常为负数，表示下落）
+            lastVerticalSpeed = rb.linearVelocity.y;
         }
-        if (hasJumped)
-            ignoreGroundTimer += Time.deltaTime;
 
+        if (hasJumped) ignoreGroundTimer += Time.deltaTime;
+
+        // —— 你的原落地处理（保持不变）——
         if (isGround && ignoreGroundTimer >= 0.08f)
         {
             isJumping = false;
             ignoreGroundTimer = 0f;
             hasJumped = false;
-            characterGestureState = GestureState.Stand;
-
 
             if (currentJumpCount == 1)
             {
-                // 刚做完第1跳，开第2段窗口
                 secondWindowActive = true;
                 secondWindowTimer = secondJumpWindow;
-                thirdWindowActive = false; // 保险
+                thirdWindowActive = false;
             }
             else if (currentJumpCount == 2 && characterMoveState == SpeedState.Run)
             {
-                // 刚做完第2跳，开第3段窗口
                 thirdWindowActive = true;
-                thirdWindowTimer = thirdJumpWindow; //
-                secondWindowActive = false;            // 
+                thirdWindowTimer = thirdJumpWindow;
+                secondWindowActive = false;
             }
             else
             {
-                // 其它情况落地（比如第三段完成后或超时后）不自动开窗口
+                // 其它情况……
             }
         }
 
-        // 窗口倒计时与过期清理
+        // 窗口倒计时（保持不变）
         if (secondWindowActive)
         {
             secondWindowTimer -= Time.deltaTime;
             if (secondWindowTimer <= 0f)
             {
                 secondWindowActive = false;
-                // 只有当第三段窗口不在时，才把链条清零（避免刚转入 third 的瞬间被清零）
                 if (!thirdWindowActive)
                     currentJumpCount = 0;
             }
@@ -394,6 +424,45 @@ public class CharacterMovement : MonoBehaviour
                 currentJumpCount = 0;
             }
         }
+
+        // 关键：检测“从空中 → 落地”的边沿，并在 Rolling 时给前冲 ★★★
+        if (!wasGrounded && isGround) // 空中上一帧、这一帧落地
+        {
+            if (characterGestureState == GestureState.Rolling)
+            {
+                // 以落地前的下落速度大小来决定前冲强度
+                float fallSpeed = Mathf.Abs(lastVerticalSpeed); // 取绝对值
+                if (fallSpeed >= rollingLandingBoostMinFall)
+                {
+                    float boost = fallSpeed * rollingLandingBoostMultiplier;
+                    boost = Mathf.Min(boost, rollingLandingBoostMax);
+
+                    // 给一个沿角色 forward 的爆发速度变化（VelocityChange 不受质量影响）
+                    Vector3 forwardPlanar = transform.forward; forwardPlanar.y = 0f;
+                    if (forwardPlanar.sqrMagnitude > 0f) forwardPlanar.Normalize();
+
+                    // 如果不允许超过 maxRollingSpeed，就在施加前做一次预测并裁剪
+                    if (!allowOverMaxRollingSpeed)
+                    {
+                        Vector3 v = rb.linearVelocity;
+                        Vector3 planar = new Vector3(v.x, 0f, v.z);
+                        Vector3 candidate = planar + forwardPlanar * boost; // 施加后的平面速度
+                        float maxPlanar = (characterGestureState == GestureState.Rolling) ? maxRollingSpeed : maxSpeed;
+                        if (candidate.magnitude > maxPlanar)
+                        {
+                            candidate = candidate.normalized * maxPlanar;
+                            // 用“差值”作为真正可施加的 boost
+                            boost = Mathf.Max(0f, (candidate - planar).magnitude);
+                        }
+                    }
+
+                    rb.AddForce(forwardPlanar * boost, ForceMode.VelocityChange);
+                }
+            }
+        }
+
+        // 更新上一帧是否在地面
+        wasGrounded = isGround;
     }
 
    
@@ -615,7 +684,7 @@ public class CharacterMovement : MonoBehaviour
             }
             else if (characterGestureState == GestureState.Rolling)
             {
-                rb.AddForce(transform.forward * acceleration/5, ForceMode.Acceleration);
+                //rb.AddForce(transform.forward * acceleration/5, ForceMode.Acceleration);
             }
         }
         else
@@ -649,13 +718,7 @@ public class CharacterMovement : MonoBehaviour
                 rb.linearVelocity = new Vector3(planar.x, S.y, planar.z);
             }
 
-            if (isGround)
-            {
-                //Vector3 v = rb.linearVelocity;
-                //Vector3 planar1 = new Vector3(v.x, 0f, v.z);
-                //planar1 = Vector3.MoveTowards(planar1, Vector3.zero, deceleration * Time.fixedDeltaTime);
-                //rb.linearVelocity = new Vector3(planar1.x, v.y, planar1.z);
-            }
+          
         }
 
     }
