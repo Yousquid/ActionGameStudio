@@ -116,6 +116,16 @@ public class CharacterMovement : MonoBehaviour
     public float fallingVelocity;
     public float speed;
 
+    [Header("Rolling Release Hop")]
+    public float rollingReleaseHopUp = 3f;        // 松开K时的竖直抬升
+    public float rollingReleaseHopForward = 6f;   // 松开K时的前向爆发
+    public float rollingReleaseHopCooldown = 0.2f;// 防抖：连续松开K的冷却
+    private float rollingReleaseHopCDTimer = 2f;
+    private bool hasHoped = false;
+
+    // 用于检测“从Rolling -> 非Rolling”的帧级过渡
+    private bool wasRollingPrevFrame = false;
+
     void Start()
     {
         mesh = GetComponent<MeshRenderer>();
@@ -142,8 +152,44 @@ public class CharacterMovement : MonoBehaviour
         var A = rb.linearVelocity;
         A.y = 0;
         speed = A.magnitude;
+
+        if (rollingReleaseHopCDTimer > 0f)
+            rollingReleaseHopCDTimer -= Time.deltaTime;
+
+        // 记录上一帧是否是Rolling（用于边沿检测/安全校验）
+        wasRollingPrevFrame = (characterGestureState == GestureState.Rolling);
     }
 
+    private void TryRollingReleaseHop()
+    {
+        // 冷却中 or 刚才并不是Rolling：不触发
+        if (rollingReleaseHopCDTimer > 0f || !wasRollingPrevFrame)
+            return;
+
+        if (hasHoped)
+            return;
+        // 仅在地面上触发（若你希望空中也能触发，可以去掉 isGround 判断）
+        //if (!isGround)
+        //    return;
+
+        // 不计入正常跳跃：不改 isJumping/hasJumped/currentJumpCount
+
+        // 提示：避免先前下压速度影响小跳（可按需保留/删除）
+        var v = rb.linearVelocity;
+        v.y = Mathf.Max(0f, v.y);   // 不把向上速度清零，只去掉向下分量
+        rb.linearVelocity = v;
+
+        // 前向（水平）+ 向上 的小跳：使用 VelocityChange 不受质量影响、且非常“脆”
+        Vector3 forwardPlanar = transform.forward; forwardPlanar.y = 0f;
+        if (forwardPlanar.sqrMagnitude > 0f) forwardPlanar.Normalize();
+
+        Vector3 impulse = forwardPlanar * rollingReleaseHopForward + Vector3.up * rollingReleaseHopUp;
+        rb.AddForce(impulse, ForceMode.VelocityChange);
+
+        // 开冷却，避免连续触发
+        rollingReleaseHopCDTimer = rollingReleaseHopCooldown;
+        hasHoped = true;
+    }
     void ReadCameraBasis()
     {
             camForward = camera.forward;
@@ -184,14 +230,19 @@ public class CharacterMovement : MonoBehaviour
 
     void RollingDetection()
     {
+        // 进入 Rolling（你原有的条件）
         if (Input.GetKey(KeyCode.K) && fallingVelocity <= -12f && characterGestureState != GestureState.Rolling)
         {
             characterGestureState = GestureState.Rolling;
         }
+        // 松开K：先试图触发小跳，再改姿态
         else if (Input.GetKeyUp(KeyCode.K))
         {
-            characterGestureState = GestureState.Stand;
+            // 只有从Rolling松开K才触发（Try函数内部也有 wasRollingPrevFrame 保护）
+            TryRollingReleaseHop();
 
+            // 然后退出 Rolling
+            characterGestureState = GestureState.Stand;
         }
     }
 
@@ -258,7 +309,7 @@ public class CharacterMovement : MonoBehaviour
                     rb.AddForce(jumpVector, ForceMode.Impulse);
 
                 }
-                else
+                else if (characterGestureState == GestureState.Rolling)
                 {
                     rb.AddForce(jumpVector/2, ForceMode.Impulse);
 
@@ -331,13 +382,22 @@ public class CharacterMovement : MonoBehaviour
         isLongJumping = true;
 
         Vector3 v = rb.linearVelocity;
-        v.x = v.x/2;
-        v.z = v.z/2;
+        v.x = v.x/3*2;
+        v.z = v.z/3*2;
         rb.linearVelocity = v;
 
 
         Vector3 jumpVector = Vector3.up * longJumpForce;
-        rb.AddForce(jumpVector, ForceMode.Impulse);
+        if (characterGestureState != GestureState.Rolling)
+        {
+            rb.AddForce(jumpVector/2, ForceMode.Impulse);
+
+        }
+        else if (characterGestureState == GestureState.Rolling)
+        {
+            rb.AddForce(jumpVector*2.4F, ForceMode.Impulse);
+
+        }
 
 
         float timer = 0f;
@@ -379,11 +439,12 @@ public class CharacterMovement : MonoBehaviour
         if (hasJumped) ignoreGroundTimer += Time.deltaTime;
 
         // —— 你的原落地处理（保持不变）——
-        if (isGround && ignoreGroundTimer >= 0.08f)
+        if (isGround && ignoreGroundTimer >= 0.02f)
         {
             isJumping = false;
             ignoreGroundTimer = 0f;
             hasJumped = false;
+            hasHoped = false;
 
             if (currentJumpCount == 1)
             {
@@ -509,7 +570,7 @@ public class CharacterMovement : MonoBehaviour
             else
             {
                 // 否则（没按或不在地面）按你的设计，回 Stand（也可不处理）
-                characterGestureState = GestureState.Stand;
+                //characterGestureState = GestureState.Stand;
             }
         }
     }

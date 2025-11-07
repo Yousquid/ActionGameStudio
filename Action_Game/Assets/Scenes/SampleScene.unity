@@ -2197,7 +2197,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: f136c764383697f469cb30fcba56597d, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2237,7 +2237,7 @@ Transform:
   m_GameObject: {fileID: 889847023}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -216.8, y: 0, z: -102.211}
+  m_LocalPosition: {x: -221.9, y: 0, z: -102.211}
   m_LocalScale: {x: 116.294426, y: 2.708572, z: 92.59882}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3628,7 +3628,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: f136c764383697f469cb30fcba56597d, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4246,9 +4246,9 @@ MonoBehaviour:
   thirdHoldJumpTimer: 0
   thirdJumpWindow: 0.2
   thirdWindowActive: 0
-  backJumpForce: 13.5
+  backJumpForce: 16
   backJumpHorizontalForce: 11.5
-  backForceDuration: 1.4
+  backForceDuration: 0.5
   horizontalForceCurve:
     serializedVersion: 2
     m_Curve:
@@ -4338,6 +4338,9 @@ MonoBehaviour:
   allowOverMaxRollingSpeed: 0
   fallingVelocity: 0
   speed: 0
+  rollingReleaseHopUp: 15
+  rollingReleaseHopForward: 6
+  rollingReleaseHopCooldown: 0.2
 --- !u!54 &1845719057
 Rigidbody:
   m_ObjectHideFlags: 0
