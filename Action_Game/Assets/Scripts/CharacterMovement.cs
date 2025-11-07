@@ -193,6 +193,7 @@ public class CharacterMovement : MonoBehaviour
             mesh.enabled = true;
             headIndicator.SetActive(true);
             crounchObject.SetActive(false);
+            rollingObject.SetActive(false);
         }
     }
 
@@ -607,7 +608,15 @@ public class CharacterMovement : MonoBehaviour
                 rotationSpeed = 90f;
 
             }
-            rb.AddForce(transform.forward * acceleration, ForceMode.Acceleration);
+            if (characterGestureState != GestureState.Rolling)
+            {
+                rb.AddForce(transform.forward * acceleration, ForceMode.Acceleration);
+
+            }
+            else if (characterGestureState == GestureState.Rolling)
+            {
+                rb.AddForce(transform.forward * acceleration/5, ForceMode.Acceleration);
+            }
         }
         else
         {
