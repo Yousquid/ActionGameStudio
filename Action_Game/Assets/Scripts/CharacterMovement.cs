@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Unity.Cinemachine;
 using System.Collections;
+using UnityEngine.SceneManagement;
 public class CharacterMovement : MonoBehaviour
 {
     public float acceleration = 10f;    // 加速度
@@ -95,6 +96,12 @@ public class CharacterMovement : MonoBehaviour
 
     private float ignoreGroundTimer = 0;
 
+    [Header("Air Dash (J)")]
+    public float airDashForward = 12f;     // 向前突进强度
+    public float airDashUp = 2f;           // 轻微抬升（需要更平就调小或设0）
+    public float airDashMaxPlanarSpeed = 20f; // 可选：突进后水平速度上限
+    private bool airDashUsed = false;      // 一次空中只能用一次  // 
+
     [Header("RollingSettings")]
     public GameObject rollingObject;
     public bool isRolling = false;
@@ -158,6 +165,11 @@ public class CharacterMovement : MonoBehaviour
 
         // 记录上一帧是否是Rolling（用于边沿检测/安全校验）
         wasRollingPrevFrame = (characterGestureState == GestureState.Rolling);
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            SceneManager.LoadScene(0);
+        }
     }
 
     private void TryRollingReleaseHop()
@@ -206,10 +218,47 @@ public class CharacterMovement : MonoBehaviour
         StopCharacterWhileHoldingOppositeDirections();
         CrounchDetection();
         RotateCharacterWhileIdle();
+        AirDashDetection(); 
         RollingDetection();
     }
 
-   
+    private void AirDashDetection() // 
+    {
+        // 只有在空中且本次空中还没用过才能触发
+        if (!isGround && !airDashUsed && Input.GetKeyDown(KeyCode.J))
+        {
+            // 如果你不希望某些特殊状态能用（比如长跳/后撤/滚动），可以在这里挡掉：
+            if (isLongJumping || isBackJumping)
+                return;
+
+            // 取水平前向（优先玩家朝向；若为零可用相机前向回退）
+            Vector3 forwardPlanar = transform.forward;
+            forwardPlanar.y = 0f;
+            if (forwardPlanar.sqrMagnitude < 0.0001f)
+            {
+                forwardPlanar = camForward;
+                forwardPlanar.y = 0f;
+            }
+            if (forwardPlanar.sqrMagnitude > 0f) forwardPlanar.Normalize();
+
+           
+
+            // 突进：水平 + 竖直 的“速度变化”，不计入正常跳跃计数
+            Vector3 impulse = forwardPlanar * airDashForward + Vector3.up * airDashUp;
+            rb.AddForce(impulse, ForceMode.VelocityChange);
+
+            // 可选：突进后做一次水平速度上限裁剪，避免过大
+            Vector3 planar = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+            if (planar.magnitude > airDashMaxPlanarSpeed)
+            {
+                Vector3 capped = planar.normalized * airDashMaxPlanarSpeed;
+                rb.linearVelocity = new Vector3(capped.x, rb.linearVelocity.y, capped.z);
+            }
+
+            // 标记本次空中已使用
+            airDashUsed = true;
+        }
+    }
     void StateDetection()
     {
         if (rb.linearVelocity.magnitude > 0f && rb.linearVelocity.magnitude <= 5f)
@@ -445,6 +494,7 @@ public class CharacterMovement : MonoBehaviour
             ignoreGroundTimer = 0f;
             hasJumped = false;
             hasHoped = false;
+            airDashUsed = false;
 
             if (currentJumpCount == 1)
             {
