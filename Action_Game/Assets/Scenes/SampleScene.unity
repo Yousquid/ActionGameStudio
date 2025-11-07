@@ -3795,7 +3795,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!135 &1756757674
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -4107,7 +4107,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterMovement
   acceleration: 20
   maxSpeed: 15
-  deceleration: 8
+  deceleration: 40
   rotationSpeed: 90
   cameraRotationControllor: {fileID: 1320250769}
   camera: {fileID: 1320250768}
@@ -4171,9 +4171,9 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   isBackJumping: 0
-  longJumpForce: 7.8
+  longJumpForce: 1.92
   longJumpHorizontalForce: 18.5
-  longJumpForceDuration: 1.55
+  longJumpForceDuration: 1.66
   longJumpHorizontalForceCurve:
     serializedVersion: 2
     m_Curve:

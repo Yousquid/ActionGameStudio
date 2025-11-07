@@ -233,16 +233,17 @@ public class CharacterMovement : MonoBehaviour
                 rb.AddForce(jumpVector, ForceMode.Impulse);
 
             }
+            
+            if (longJumpWindowActivate)
+            {
+                StartCoroutine(DoLongstep());
+            }
             else if (characterGestureState == GestureState.Counch && !longJumpWindowActivate)
             {
                 StartCoroutine(DoBackstep());
 
             }
-            else if (characterGestureState == GestureState.Counch && longJumpWindowActivate)
-            {
-                StartCoroutine(DoLongstep());
-            }
-            
+
         }
 
 
@@ -397,23 +398,22 @@ public class CharacterMovement : MonoBehaviour
    
     void CrounchDetection()
     {
+        // 只在按下瞬间开窗；不立即进入 crounch
         if (Input.GetKeyDown(KeyCode.LeftShift) && isGround)
         {
-            characterGestureState = GestureState.Counch;
-
             longJumpTimer = longJumpWindow;
+            longJumpWindowActivate = true;   // 显式置位
+                                             // 不改 characterGestureState（保持原姿态）
         }
-        else if (Input.GetKey(KeyCode.LeftShift) && isGround)
+        // 松开时关窗并回到 Stand
+        else if (Input.GetKeyUp(KeyCode.LeftShift))
         {
-            characterGestureState = GestureState.Counch;
-        }
-        else
-        {
-            characterGestureState = GestureState.Stand;
             longJumpTimer = 0f;
             longJumpWindowActivate = false;
+            characterGestureState = GestureState.Stand;
         }
 
+        // 保留你的外观切换，仅当真的处于 crounch 时才生效
         CrounchChange();
     }
 
@@ -422,7 +422,26 @@ public class CharacterMovement : MonoBehaviour
         if (longJumpTimer > 0f)
             longJumpTimer -= Time.deltaTime;
 
-        longJumpWindowActivate = longJumpTimer > 0f;  // 直接由计时器决定
+        bool wasActive = longJumpWindowActivate;
+        bool nowActive = longJumpTimer > 0f;
+
+        // 更新当前状态
+        longJumpWindowActivate = nowActive;
+
+        // —— 关键逻辑：窗口从“有”变“无”的瞬间，切换到 crounch ——
+        if (wasActive && !nowActive)
+        {
+            // 仍按着 Shift 且在地面，才进入蹲姿
+            if (Input.GetKey(KeyCode.LeftShift) && isGround)
+            {
+                characterGestureState = GestureState.Counch;
+            }
+            else
+            {
+                // 否则（没按或不在地面）按你的设计，回 Stand（也可不处理）
+                characterGestureState = GestureState.Stand;
+            }
+        }
     }
 
     void CrounchChange()
@@ -433,33 +452,14 @@ public class CharacterMovement : MonoBehaviour
             headIndicator.SetActive(false);
             crounchObject.SetActive(true);
 
-            if (!longJumpWindowActivateTwo)
-            {
-                longJumpTimer = longJumpWindow;
-                longJumpWindowActivateTwo = true;
-            }
-            
-
-            if (rb.linearVelocity.magnitude != 0 && isGround && longJumpTimer <= 0)
+            if (rb.linearVelocity.magnitude != 0 && isGround && !longJumpWindowActivate)
             {
                 Vector3 currentVelocity = rb.linearVelocity;
-
                 float deceleration = 8.5f;
 
-                Vector3 newVelocity;
-
-                newVelocity = currentVelocity;
-
-                newVelocity.x = 0;
-                newVelocity.z = 0;
-
-                Vector3 renewVelocity = Vector3.MoveTowards(
-                    currentVelocity,
-                    newVelocity,
-                    deceleration * Time.fixedDeltaTime
-                );
-
-                rb.linearVelocity = newVelocity;
+                Vector3 planar = new Vector3(currentVelocity.x, 0f, currentVelocity.z);
+                planar = Vector3.MoveTowards(planar, Vector3.zero, deceleration * Time.fixedDeltaTime);
+                rb.linearVelocity = new Vector3(planar.x, currentVelocity.y, planar.z);
             }
         }
     }
